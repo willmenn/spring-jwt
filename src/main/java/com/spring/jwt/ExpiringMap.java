@@ -1,6 +1,9 @@
 package com.spring.jwt;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.stream.Collectors;
@@ -21,9 +24,10 @@ public class ExpiringMap<T, V> {
             return defaultValue;
         } else if (object.expireObject.time.isBefore(now())) {
             removeCompletely(key, object);
+            return defaultValue;
         }
         expireLastData();
-        return defaultValue;
+        return object.value;
     }
 
     private void removeCompletely(T key, ExpireObjectForMap object) {
@@ -57,7 +61,7 @@ public class ExpiringMap<T, V> {
     private synchronized void expireLastData() {
         LocalDateTime now = now();
         ExpireObject maybeExpiredObject = queue.remove();
-        
+
         if (!maybeExpiredObject.time.isBefore(now)) {
             queue.add(maybeExpiredObject);
         } else {
