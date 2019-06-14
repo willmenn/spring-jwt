@@ -32,8 +32,15 @@ public class ExpiringMap<T, V> {
     }
 
     public Object put(T key, V value, LocalDateTime expirationTime) {
-        ExpireObject expireObject = new ExpireObject(key);
-        queue.add(expireObject);
+        ExpireObject expireObject;
+        if (!queue.contains(Objects.hash(expirationTime))) {
+            expireObject = new ExpireObject(key);
+            queue.add(expireObject);
+        } else {
+            expireObject = queue.poll();
+            expireObject.addKey(key);
+        }
+
         return map.put(key, new ExpireObjectForMap<>(value, expireObject));
     }
 
@@ -42,7 +49,7 @@ public class ExpiringMap<T, V> {
                 .filter(t -> t.time.isBefore(now()))
                 .collect(Collectors.toList())
                 .forEach(elem -> {
-                    map.remove(elem.key);
+                    elem.keys.forEach(k -> map.remove(k));
                     queue.remove(elem);
                 });
     }
@@ -50,10 +57,11 @@ public class ExpiringMap<T, V> {
     private synchronized void expireLastData() {
         LocalDateTime now = now();
         ExpireObject maybeExpiredObject = queue.remove();
+        
         if (!maybeExpiredObject.time.isBefore(now)) {
             queue.add(maybeExpiredObject);
         } else {
-            map.remove(maybeExpiredObject.key);
+            maybeExpiredObject.keys.forEach(k -> map.remove(k));
         }
     }
 
@@ -63,14 +71,30 @@ public class ExpiringMap<T, V> {
 
     private class ExpireObject<T> {
         private LocalDateTime time;
+        private List<T> keys;
 
-        private T key;
-
-        private ExpireObject(T key) {
-            this.key = key;
+        private ExpireObject(T keys) {
+            this.keys = new ArrayList<>();
+            this.keys.add(keys);
             this.time = now();
         }
 
+        void addKey(T key) {
+            this.keys.add(key);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            ExpireObject<?> that = (ExpireObject<?>) o;
+            return Objects.equals(time, that.time);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(time, keys);
+        }
     }
 
     private class ExpireObjectForMap<V> {
